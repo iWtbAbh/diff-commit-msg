@@ -1,0 +1,110 @@
+import { inject, injectable } from 'inversify';
+import { ConfigKeys, ConfigService, NAME } from './config-service';
+import type { ReasoningEffort } from 'openai/resources';
+import * as vscode from 'vscode';
+import { zeroToUndefined } from '../utils/utils';
+import type { ModelConfig, ServerConfig } from '../../types/shared';
+import { createProviderKey } from '../providers';
+import { omit } from 'lodash-es';
+
+export interface Server {
+  config: ServerConfig;
+  model: ModelConfig;
+  label: string;
+}
+
+@injectable()
+export class LLMServerService implements vscode.Disposable {
+  private disposable: vscode.Disposable;
+  private servers: Server[] = [];
+
+  private onDidChangeServer: vscode.EventEmitter<void> = new vscode.EventEmitter<void>();
+  readonly onDidChange = this.onDidChangeServer.event;
+
+  constructor(
+    @inject(ConfigService)
+    private configService: ConfigService
+  ) {
+    this.disposable = this.configService.onDidChange(() => {
+      this.servers = [];
+      this.buildServers();
+    });
+    this.buildServers();
+  }
+
+  listProviders() {
+    return this.configService.getConfig<ServerConfig[]>(ConfigKeys.SERVERS).map((server) => ({
+      ...server,
+      providerKey: createProviderKey(server)
+    }));
+  }
+
+  getServers() {
+    return this.servers;
+  }
+
+  updateServer(index: number, config: ServerConfig) {
+    const servers = this.configService.getConfig<ServerConfig[]>(ConfigKeys.SERVERS, []);
+    if (!servers[index]) {
+      servers.push(config);
+    } else {
+      servers[index] = config;
+    }
+    this.saveServers(servers);
+  }
+
+  deleteServer(index: number) {
+    const servers = this.configService.getConfig<ServerConfig[]>(ConfigKeys.SERVERS, []);
+    if (!servers[index]) {
+      throw new Error('Invalid index');
+    }
+    servers.splice(index, 1);
+    this.saveServers(servers);
+  }
+
+  saveServers(servers: ServerConfig[]) {
+    this.configService.updateConfig(
+      ConfigKeys.SERVERS,
+      servers.map((s) => omit(s, 'providerKey'))
+    );
+  }
+
+  private buildServers() {
+    const configs = this.configService.getConfig<ServerConfig[]>(ConfigKeys.SERVERS, []);
+    const globalTimeout = this.configService.getConfig<number>(ConfigKeys.TIMEOUT, 60000);
+    const globalTemperature = this.configService.getConfig<number>(ConfigKeys.TEMPERATURE, 0.7);
+    const globalMaxTokens = this.configService.getConfig<number>(ConfigKeys.MAX_TOKENS);
+    const globalMaxInputTokens = this.configService.getConfig<number>(ConfigKeys.MAX_INPUT_TOKENS);
+    const globalReasoningEffort = this.configService.getConfig<ReasoningEffort | 'default'>(
+      ConfigKeys.REASONING_EFFORT,
+      'default'
+    );
+
+    this.servers = configs.flatMap((config) => {
+      return config.models
+        .filter((m) => m.enabled !== false)
+        .map((model) => {
+          return {
+            config: {
+              ...config,
+              timeout: config.timeout ?? globalTimeout
+            },
+            model: {
+              ...model,
+              temperature: model.temperature ?? globalTemperature,
+              maxTokens: zeroToUndefined(model.maxTokens) ?? zeroToUndefined(globalMaxTokens),
+              maxInputTokens:
+                zeroToUndefined(model.maxInputTokens) ?? zeroToUndefined(globalMaxInputTokens),
+              reasoningEffort: model.reasoningEffort ?? globalReasoningEffort
+            },
+            label: `${config.type}:${model.name} (${config.baseURL || 'default'})`
+          };
+        });
+    });
+    this.onDidChangeServer.fire();
+  }
+
+  dispose() {
+    this.disposable.dispose();
+  }
+}

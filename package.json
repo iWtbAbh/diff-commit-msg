@@ -1,0 +1,386 @@
+{
+  "name": "commit-ai",
+  "displayName": "Diff Commit Message",
+  "version": "0.0.1",
+  "description": "An AI-powered VS Code extension to generate Conventional Commit messages. Features multi-engine support (OpenAI, Azure, Gemini, DeepSeek), high-reliability failover, and accurate real-time token tracking.",
+  "categories": [
+    "Other"
+  ],
+  "keywords": [
+    "AI Commit",
+    "Auto Commit",
+    "Azure",
+    "ChatGPT",
+    "Commit Message",
+    "Commit Message Generator",
+    "Diff Commit Message",
+    "Commitizen",
+    "Conventional Commits",
+    "Git Commit",
+    "GitEmoji",
+    "OpenAI"
+  ],
+  "license": "MIT",
+  "repository": "https://github.com/iWtbAbh/diff-commit-msg",
+  "publisher": "iWtbAbh",
+  "main": "./dist/extension.js",
+  "scripts": {
+    "build": "tsdown --minify",
+    "compile": "tsdown",
+    "fmt": "oxfmt",
+    "fmt:check": "oxfmt --check",
+    "lint": "eslint src --ext ts",
+    "package": "vsce package --no-dependencies",
+    "publish": "vsce publish --no-dependencies",
+    "release": "node scripts/release.js",
+    "update-model-config": "tsx scripts/update-model-config.ts",
+    "vscode:prepublish": "pnpm run build && pnpm run webview:build",
+    "watch": "tsdown --watch",
+    "webview:build": "cd webview-ui && pnpm build",
+    "webview:watch": "cd webview-ui && pnpm dev"
+  },
+  "dependencies": {
+    "@google/genai": "^1.50.1",
+    "@types/lodash-es": "^4.17.12",
+    "cheerio": "^1.2.0",
+    "fs-extra": "^11.0.4",
+    "inversify": "^8.1.0",
+    "lodash-es": "^4.18.1",
+    "openai": "^6.33.0",
+    "reflect-metadata": "^0.2.2",
+    "simple-git": "^3.17.0",
+    "tiktoken": "^1.0.21"
+  },
+  "devDependencies": {
+    "@types/fs-extra": "^11.0.4",
+    "@types/glob": "^8.1.0",
+    "@types/mocha": "^10.0.1",
+    "@types/node": "16.x",
+    "@types/vscode": "^1.77.0",
+    "@typescript-eslint/eslint-plugin": "^5.56.0",
+    "@typescript-eslint/parser": "^5.56.0",
+    "@vscode/test-electron": "^2.3.0",
+    "@vscode/vsce": "^3.7.1",
+    "eslint": "^8.36.0",
+    "glob": "^8.1.0",
+    "mocha": "^10.2.0",
+    "oxfmt": "^0.43.0",
+    "tsdown": "^0.21.7",
+    "tsx": "^4.19.3",
+    "typescript": "^5.9.3"
+  },
+  "resolutions": {
+    "@types/node": "16.x"
+  },
+  "contributes": {
+    "commands": [
+      {
+        "command": "extension.commit-ai",
+        "icon": {
+          "dark": "images/icon-dark.svg",
+          "light": "images/icon-light.svg"
+        },
+        "title": "Diff Commit Message"
+      },
+      {
+        "command": "extension.commit-ai.settings",
+        "title": "Diff Commit Message: AI Server Settings"
+      }
+    ],
+    "configuration": [
+      {
+        "title": "General",
+        "properties": {
+          "commit-ai.AI_COMMIT_LANGUAGE": {
+            "default": "English",
+            "description": "Commit message language",
+            "enum": [
+              "Simplified Chinese",
+              "Traditional Chinese",
+              "Japanese",
+              "Korean",
+              "Czech",
+              "German",
+              "French",
+              "Italian",
+              "Dutch",
+              "Portuguese",
+              "Vietnamese",
+              "English",
+              "Spanish",
+              "Swedish",
+              "Russian",
+              "Bahasa",
+              "Polish",
+              "Turkish",
+              "Thai"
+            ],
+            "enumDescriptions": [
+              "简体中文",
+              "繁體中文",
+              "にほんご",
+              "한국어",
+              "česky",
+              "Deutsch",
+              "française",
+              "italiano",
+              "Nederlands",
+              "português",
+              "tiếng Việt",
+              "english",
+              "español",
+              "Svenska",
+              "русский",
+              "bahasa",
+              "Polski",
+              "Turkish",
+              "ไทย"
+            ],
+            "type": "string"
+          },
+          "commit-ai.TOKEN_COUNT_MODE": {
+            "type": "string",
+            "enum": [
+              "fast",
+              "accurate"
+            ],
+            "default": "fast",
+            "markdownDescription": "Token counting mode. `fast` uses character-based estimation (instant, no dependencies). `accurate` uses `tiktoken` for precise counting (slightly slower, requires `tiktoken` dependency)."
+          },
+          "commit-ai.SHOW_TOKEN_COUNT": {
+            "type": "boolean",
+            "default": true,
+            "description": "Whether to show token count in the status bar."
+          }
+        }
+      },
+      {
+        "title": "Prompt",
+        "properties": {
+          "commit-ai.PROMPT_TEMPLATE": {
+            "type": "string",
+            "default": "with_gitmoji.md",
+            "description": "Select a prompt template for generating commit messages. Choose 'custom' to use your own prompt defined in 'AI_COMMIT_SYSTEM_PROMPT'.",
+            "enum": [
+              "with_gitmoji.md",
+              "with_nobody_gitmoji.md",
+              "with_simple_gitmoji.md",
+              "without_gitmoji.md",
+              "without_nobody_gitmoji.md",
+              "without_simple_gitmoji.md",
+              "custom"
+            ],
+            "enumDescriptions": [
+              "With Gitmoji (Detailed body)",
+              "With Gitmoji (Subject only)",
+              "With Gitmoji (Simple body)",
+              "Without Gitmoji (Detailed body)",
+              "Without Gitmoji (Subject only)",
+              "Without Gitmoji (Simple body)",
+              "Custom (Use AI_COMMIT_SYSTEM_PROMPT)"
+            ]
+          },
+          "commit-ai.AI_COMMIT_SYSTEM_PROMPT": {
+            "type": "string",
+            "default": "",
+            "description": "Custom system prompt for generating commit messages. Used only when 'PROMPT_TEMPLATE' is set to 'custom'."
+          }
+        }
+      },
+      {
+        "title": "AI Server Defaults",
+        "properties": {
+          "commit-ai.timeout": {
+            "type": "number",
+            "default": 60000,
+            "minimum": 1000,
+            "description": "Global default timeout in ms. Used when a server does not specify its own timeout."
+          },
+          "commit-ai.temperature": {
+            "type": "number",
+            "default": 0.7,
+            "minimum": 0,
+            "maximum": 2,
+            "description": "Global default temperature (0-2). Used when a model does not specify its own temperature."
+          },
+          "commit-ai.maxTokens": {
+            "type": "number",
+            "default": 0,
+            "minimum": 0,
+            "description": "Global default max output tokens (0 = no limit). Used when a model does not specify its own."
+          },
+          "commit-ai.maxInputTokens": {
+            "type": "number",
+            "minimum": 0,
+            "default": 0,
+            "description": "Global default max input tokens (0 = auto-detect from model name). Used when a model does not specify its own."
+          },
+          "commit-ai.reasoningEffort": {
+            "type": "string",
+            "enum": [
+              "default",
+              "none",
+              "minimal",
+              "low",
+              "medium",
+              "high",
+              "xhigh"
+            ],
+            "default": "default",
+            "description": "Global default reasoning effort for OpenAI reasoning models (o1/o3). 'default' = not passed."
+          }
+        }
+      },
+      {
+        "title": "Diff Optimization",
+        "properties": {
+          "commit-ai.SMART_DIFF": {
+            "type": "boolean",
+            "default": true,
+            "description": "Automatically simplify diff content before sending to AI. Removes binary files, asset files, generated code, and truncates oversized diffs while preserving file names and change summaries."
+          },
+          "commit-ai.SMART_DIFF_MAX_FILE_CHARS": {
+            "type": "number",
+            "default": 20000,
+            "minimum": 1000,
+            "description": "Maximum characters per file diff. Files exceeding this limit will be truncated (keeping 70% from the beginning and 30% from the end)."
+          },
+          "commit-ai.EXCLUDE_FILES": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "default": [
+              "package-lock.json",
+              "pnpm-lock.yaml",
+              "yarn.lock",
+              "*.min.js",
+              "*.min.css"
+            ],
+            "description": "Files to exclude from the diff. Supports simple patterns (e.g. *.lock)."
+          }
+        }
+      },
+      {
+        "title": "Servers",
+        "properties": {
+          "commit-ai.servers": {
+            "type": "array",
+            "default": [],
+            "markdownDescription": "AI server configurations. Each entry defines a provider with its API credentials and available models. Servers are tried in order; on failure the next server is used automatically. Tip: Use the [AI Server Settings](command:extension.commit-ai.settings) command for a graphical interface to manage servers and view detailed token usage statistics.",
+            "items": {
+              "type": "object",
+              "required": [
+                "type",
+                "apiKey",
+                "models"
+              ],
+              "properties": {
+                "type": {
+                  "type": "string",
+                  "default": "openai",
+                  "enum": [
+                    "openai",
+                    "gemini",
+                    "azure"
+                  ],
+                  "description": "Provider type"
+                },
+                "baseURL": {
+                  "type": "string",
+                  "description": "API base URL (required for openai/azure, optional for gemini)"
+                },
+                "apiKey": {
+                  "type": "string",
+                  "description": "API key for the provider"
+                },
+                "apiVersion": {
+                  "type": "string",
+                  "description": "Azure API version (azure only)"
+                },
+                "timeout": {
+                  "type": "number",
+                  "description": "Per-server timeout in ms (overrides global timeout)"
+                },
+                "models": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "required": [
+                      "name"
+                    ],
+                    "properties": {
+                      "name": {
+                        "type": "string",
+                        "description": "Model name"
+                      },
+                      "enabled": {
+                        "type": "boolean",
+                        "default": true,
+                        "description": "Enable this model"
+                      },
+                      "temperature": {
+                        "type": "number",
+                        "minimum": 0,
+                        "maximum": 2,
+                        "description": "Per-model temperature (overrides global temperature)"
+                      },
+                      "maxTokens": {
+                        "type": "number",
+                        "minimum": 0,
+                        "default": 0,
+                        "description": "Per-model max output tokens (0 = no limit, overrides global maxTokens)"
+                      },
+                      "maxInputTokens": {
+                        "type": "number",
+                        "minimum": 0,
+                        "default": 0,
+                        "description": "Per-model max input tokens (0 = auto-detect from model name)"
+                      },
+                      "reasoningEffort": {
+                        "type": "string",
+                        "enum": [
+                          "default",
+                          "none",
+                          "low",
+                          "medium",
+                          "high"
+                        ],
+                        "default": "default",
+                        "description": "For OpenAI reasoning models (o1/o3): controls reasoning effort. 'default' = not passed."
+                      },
+                      "options": {
+                        "type": "object",
+                        "description": "Provider-specific options as key-value pairs. Any additional parameters not covered by the schema can be passed through here."
+                      }
+                    }
+                  },
+                  "description": "List of models available on this server"
+                }
+              }
+            }
+          }
+        }
+      }
+    ],
+    "menus": {
+      "scm/title": [
+        {
+          "command": "extension.commit-ai",
+          "group": "navigation"
+        }
+      ]
+    }
+  },
+  "activationEvents": [
+    "onStartupFinished"
+  ],
+  "extensionDependencies": [
+    "vscode.git"
+  ],
+  "icon": "images/logo.png",
+  "engines": {
+    "node": ">=16",
+    "vscode": "^1.77.0"
+  }
+}

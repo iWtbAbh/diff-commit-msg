@@ -1,0 +1,27 @@
+{
+  "files.exclude": {
+    "out": false,
+    "dist": false
+  },
+  "search.exclude": {
+    "out": true,
+    "dist": true
+  },
+  "typescript.tsc.autoDetect": "off",
+  "cSpell.words": [
+    "deepseek",
+    "Gitmoji",
+    "LITELLM",
+    "lucide",
+    "openrouter",
+    "oxfmt",
+    "tiktoken",
+    "https://github.com/iWtbAbh"
+  ],
+  "editor.defaultFormatter": "oxc.oxc-vscode",
+  "editor.formatOnSave": true,
+  "css.customData": [],
+  "css.lint.unknownAtRules": "ignore",
+  "scss.lint.unknownAtRules": "ignore",
+  "tailwindCSS.experimental.v4": true
+}
